@@ -1,0 +1,57 @@
+# Plantilla base de .gitignore para repositorios de equipo BattleHub
+# Copiar como ".gitignore" en la raíz del repo y eliminar las secciones
+# que no apliquen al stack elegido por el equipo.
+
+# ===== General / SO =====
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+
+# ===== Variables de entorno / secretos =====
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+*.pfx
+*.pem
+
+# ===== IDEs / Editores =====
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ===== .NET =====
+bin/
+obj/
+*.dll
+*.pdb
+
+# ===== Node / JavaScript / TypeScript =====
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ===== Python =====
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# ===== Bases de datos locales =====
+*.sqlite
+*.sqlite3
+*.db
+
+# ===== Artefactos de pruebas/CI =====
+TestResults/
+*.trx
