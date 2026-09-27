@@ -6,10 +6,6 @@
 
 ## Contexto
 
-El Equipo 5 es responsable del desarrollo de **Trivia Battle** dentro de la plataforma BattleHub. De acuerdo con los contratos definidos para los equipos de juegos, Trivia Battle debe funcionar como un microservicio independiente, compuesto por un microfrontend en Aurelia, una API REST y Hub de SignalR en .NET 10, además de una base de datos propia para la persistencia de la información del juego.
-
-Cada equipo de juego debe seleccionar su propio motor de base de datos y documentar la decisión mediante un ADR.
-
 Trivia Battle necesita persistir información relacionada con las partidas jugadas, incluyendo como mínimo el identificador de la partida (`matchId`), jugadores participantes, puntajes, fecha y hora de inicio y finalización, ganador y datos específicos del juego. También debe permitir consultar posteriormente resultados, historial de partidas y estadísticas de los jugadores.
 
 ## Decisión
@@ -28,13 +24,11 @@ No se eligió porque el equipo se siente más cómodo con las herramientas de SQ
 
 Un documento por partida encajaría bien con el `metadata` libre, pero las estadísticas por categoría requieren relacionar resultados con el banco de preguntas, algo más natural mediante un modelo relacional.
 
-Además, Matchmaking ya utiliza MongoDB, por lo que utilizar SQL Server permite mantener motores de persistencia distintos dentro de la arquitectura del proyecto.
-
 ### Archivos JSON para el banco de preguntas
 
 Se consideró almacenar el banco de preguntas en archivos JSON y guardar únicamente los resultados en la base de datos.
 
-Esta alternativa simplifica el arranque, pero obliga a redesplegar el servicio para agregar o corregir preguntas y dificulta consultar el rendimiento por categoría directamente desde la base de datos. |
+Esta alternativa simplifica el arranque, pero obliga a redesplegar el servicio para agregar o corregir preguntas y dificulta consultar el rendimiento por categoría directamente desde la base de datos.
 
 ## Consecuencias
 
@@ -42,7 +36,6 @@ Esta alternativa simplifica el arranque, pero obliga a redesplegar el servicio p
   - Preguntas y resultados conviven en un mismo modelo, lo que permite calcular estadísticas por categoría con consultas SQL directas (`GROUP BY` por categoría).
   - La selección aleatoria de preguntas filtradas por categoría y dificultad se resuelve en la propia consulta.
   - Las migraciones de EF Core versionan tanto el esquema como el banco de preguntas inicial, así que cualquier integrante (y el CI) obtiene la misma base de datos con un solo comando.
-  - Las transacciones garantizan que el resultado de una partida nunca quede incompleto.
   - El `metadata` en JSON permite agregar nuevos datos del juego (por ejemplo, tiempo promedio de respuesta) sin cambiar el esquema.
 
 - Negativas / riesgos asumidos:
