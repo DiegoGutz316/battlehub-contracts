@@ -10,13 +10,19 @@ Trivia Battle necesita persistir información relacionada con las partidas jugad
 
 ## Decisión
 
-El Equipo 5 propone usar **SQL Server** como base de datos del microservicio de trivia, con **Entity Framework Core** como ORM y migraciones versionadas en el repositorio. El banco de preguntas se cargará mediante datos semilla en las migraciones, y el campo `metadata` de cada resultado se almacenará como una columna JSON. En el pipeline de CI, las pruebas de integración usarán un contenedor efímero de SQL Server levantado con Testcontainers.
+El Equipo 5 propone usar **SQL Server** como base de datos del microservicio de trivia, con **Entity Framework Core** como ORM y migraciones versionadas en el repositorio.
+
+El banco inicial de preguntas y los demás datos de ejemplo se cargarán mediante un **script independiente de inicialización** que podrá ejecutarse cuando sea necesario. Estos datos no formarán parte de las migraciones ni del código de la aplicación, evitando mantener un volumen innecesariamente grande de datos dentro del código fuente.
+
+El campo `metadata` de cada resultado se almacenará como una columna JSON.
+
+En el pipeline de CI, las pruebas de integración usarán un contenedor efímero de SQL Server levantado con Testcontainers.
 
 ## Alternativas consideradas
 
 ### PostgreSQL
 
-Cubre las mismas necesidades, incluyendo transacciones, soporte para JSON mediante `jsonb` y un buen proveedor para Entity Framework Core. También cuenta con más opciones de hosting gratuito.
+Cubre las mismas necesidades, incluyendo soporte para JSON mediante `jsonb` y un buen proveedor para Entity Framework Core. También cuenta con más opciones de hosting gratuito.
 
 No se eligió porque el equipo se siente más cómodo con las herramientas de SQL Server y su integración con Visual Studio y SSMS, lo que reduce el tiempo de arranque.
 
@@ -26,17 +32,17 @@ Un documento por partida encajaría bien con el `metadata` libre, pero las estad
 
 ### Archivos JSON para el banco de preguntas
 
-Se consideró almacenar el banco de preguntas en archivos JSON y guardar únicamente los resultados en la base de datos.
+Se consideró almacenar el banco de preguntas en archivos JSON y utilizar SQL Server únicamente para los resultados y estadísticas.
 
-Esta alternativa simplifica el arranque, pero obliga a redesplegar el servicio para agregar o corregir preguntas y dificulta consultar el rendimiento por categoría directamente desde la base de datos.
+Para esta decisión se optó por almacenar el banco de preguntas en SQL Server y utilizar un script independiente para cargar los datos iniciales de ejemplo. No obstante, el acceso a las preguntas se mantendrá abstraído mediante IQuestionRepository, permitiendo cambiar el mecanismo de persistencia en una versión futura sin modificar la lógica principal del juego.
 
 ## Consecuencias
 
 - Positivas:
-  - Preguntas y resultados conviven en un mismo modelo, lo que permite calcular estadísticas por categoría con consultas SQL directas (`GROUP BY` por categoría).
-  - La selección aleatoria de preguntas filtradas por categoría y dificultad se resuelve en la propia consulta.
-  - Las migraciones de EF Core versionan tanto el esquema como el banco de preguntas inicial, así que cualquier integrante (y el CI) obtiene la misma base de datos con un solo comando.
-  - El `metadata` en JSON permite agregar nuevos datos del juego (por ejemplo, tiempo promedio de respuesta) sin cambiar el esquema.
+  - SQL Server permite modelar los resultados y estadísticas del juego mediante un esquema relacional.
+  - La selección de preguntas puede realizarse mediante consultas filtradas por categoría y dificultad cuando el banco de preguntas se encuentre en la base de datos.
+  - Las migraciones de Entity Framework Core permiten versionar el esquema de la base de datos, mientras que un script independiente permite cargar de forma controlada los datos iniciales de ejemplo.
+  - El `metadata` en JSON permite agregar nuevos datos del juego sin modificar inmediatamente el esquema.
 
 - Negativas / riesgos asumidos:
   - El contenedor de SQL Server tarda más en arrancar que otros motores, lo que alarga la ejecución de las pruebas de integración en el CI.
