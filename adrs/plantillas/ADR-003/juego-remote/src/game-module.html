@@ -1,0 +1,15 @@
+<!-- ADR-003 §8 / contrato visual §7: solo se dibuja dentro del área del juego.
+     Estructura sugerida: área superior (juego, partida, tiempo), área central (el juego), lateral opcional. -->
+<section class="typing-game">
+  <header class="typing-game-top">
+    <strong>Typing Battle</strong>
+    <span>Partida: ${context.matchId}</span>
+    <span>Tiempo: ${secondsLeft}s</span>
+  </header>
+
+  <main class="typing-game-center">
+    <p>Jugador: <strong>${context.currentUser.displayName}</strong> · Estado: <strong data-testid="game-state">${state}</strong></p>
+    <p>Puntos: <strong data-testid="score">${score}</strong></p>
+    <button data-testid="point-btn" click.trigger="addPoint()" disabled.bind="state !== 'running'">+1 punto</button>
+  </main>
+</section>
