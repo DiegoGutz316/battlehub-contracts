@@ -1,0 +1,44 @@
+# .gitignore de microfrontend de juego (plantilla ADR-003)
+# Basado en helpers/gitignore-template.txt de battlehub-contracts,
+# adaptado para el microfrontend: Aurelia 2 + Webpack (Node/TypeScript).
+
+# ===== General / SO =====
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+
+# ===== Variables de entorno / secretos =====
+# Aquí van URLs de la API del juego u otros valores locales.
+# Nunca se suben: solo se versiona .env.example con valores de ejemplo.
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+
+# ===== IDEs / Editores =====
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ===== Node / JavaScript / TypeScript =====
+node_modules/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ===== Webpack / caché de build =====
+.cache/
+.webpack/
+*.tsbuildinfo
+
+# ===== Artefactos de pruebas/CI =====
+test-results/
+playwright-report/
