@@ -1,4 +1,4 @@
-# ADR-006: Audiencia compartida para Profile y Matchmaking
+﻿# ADR-006: Audiencia compartida para Profile y Matchmaking
 
 - **Estado**: Propuesto
 - **Fecha**: 2026-10-02 (UTC)
@@ -6,73 +6,68 @@
 
 ## Contexto
 
-BattleHub utiliza un tenant Auth0 compartido, administrado por el Equipo 1. El Shell administra su aplicación SPA e integra Profile Service y Matchmaking, según `docs/01-gobernanza-repositorios.md` y `docs/02-arquitectura-y-flujo.md`.
+Al conectar el Shell con Profile y Matchmaking, necesitamos definir cómo van a aceptar la sesión del usuario los dos servicios.
 
-Los contratos REST definen las consultas del perfil y los permisos del usuario autenticado en `/api/profiles/me` y `/api/profiles/me/permissions`. No definen un endpoint para consultar permisos de otro usuario mediante una identidad de servicio, ni fijan cuántas APIs o audiencias deben registrarse en Auth0.
+BattleHub usa un tenant de Auth0 compartido, administrado por el Equipo 1. Nuestro equipo se encarga de la aplicación del Shell, donde el usuario inicia sesión. Esto se describe en `docs/01-gobernanza-repositorios.md` y `docs/02-arquitectura-y-flujo.md`.
 
-Matchmaking necesita verificar los permisos del usuario al crear, unirse e iniciar una partida. Si su token tiene una audiencia exclusiva de Matchmaking, Profile no debe aceptarlo automáticamente: compartir un tenant no equivale a compartir una audiencia.
+Después del login, el Shell obtiene un access token para llamar a los servicios. Ese token tiene una audiencia, que indica para qué API fue emitido. Aunque los servicios usen el mismo tenant, eso no significa que puedan aceptar cualquier token de ese tenant.
 
-Existe un prototipo local que utiliza la misma audiencia en ambos servicios y reenvía el access token a Profile para verificar identidad y permisos. Se presenta esta decisión para revisión; el prototipo no constituye aprobación del contrato ni acuerdo de los Equipos 1 y 2.
+Matchmaking necesita consultar en Profile quién es el usuario y qué permisos tiene. Los contratos actuales incluyen `/api/profiles/me` y `/api/profiles/me/permissions`, pero no especifican si ambos servicios deben compartir audiencia. Tampoco incluyen una consulta de permisos de otro usuario usando una cuenta de servicio.
+
+En la integración local se utiliza una audiencia compartida. Este ADR propone revisar esa opción con el profesor y los Equipos 1 y 2 antes de adoptarla como acuerdo del proyecto.
 
 ## Decisión
 
-Se propone representar Profile y Matchmaking como una API lógica de BattleHub con una audiencia compartida para las operaciones de usuario de esta etapa. El Shell solicita un access token para esa audiencia; cada backend valida el token y aplica la autorización de sus propias operaciones.
+Proponemos usar una misma audiencia de Auth0 para las operaciones de usuario de Profile y Matchmaking. Así, el Shell puede enviar el mismo access token a ambos servicios y Matchmaking puede usarlo para consultar los permisos del usuario en Profile.
 
-La aplicación SPA del Shell y el registro de API son recursos distintos en Auth0. No se requiere crear otra SPA para que el backend de Matchmaking valide tokens.
+Por ahora proponemos conservar el Identifier `https://api.battlehub.local/profile`, que utiliza la integración local. Este valor identifica la API en Auth0; no es la dirección donde se ejecuta el backend. Aunque su nombre dice Profile, la propuesta incluye también Matchmaking. Si después se cambia, los tres equipos deben actualizar su configuración juntos.
 
-### Configuración y responsabilidades
+El flujo sería el siguiente:
 
-- El Equipo 1 administra la configuración del tenant y coordina el registro de API y su Identifier con el Equipo 2.
-- El Equipo 3 configura la SPA, sus URLs de callback/logout y la audiencia solicitada por el Shell. No administra por esta decisión los accesos de aplicaciones de otros equipos.
-- Los Equipos 1 y 2 configuran sus backends con el emisor y la audiencia acordados. Ambos validan firma, emisor, audiencia y vigencia del token.
-- La aplicación del Shell debe estar autorizada para acceso delegado de usuario a la API lógica.
-- No se utiliza un ID token para autorizar llamadas a las APIs ni se incorpora un Client Secret al frontend.
+1. El usuario inicia sesión en el Shell mediante Auth0.
+2. El Shell obtiene un access token para la audiencia acordada.
+3. Cuando el usuario realiza una acción en una sala, el Shell envía ese token a Matchmaking.
+4. Matchmaking valida la firma, el emisor, la audiencia y la vigencia del token. Obtiene el identificador del usuario del campo `sub`.
+5. Cuando la acción requiere permisos, consulta `/api/profiles/me` y `/api/profiles/me/permissions` con el mismo token. Comprueba que el perfil corresponda al usuario autenticado y que tenga los permisos necesarios.
+6. Si no puede verificar los permisos porque Profile falla, no permite completar esa acción.
 
-El Identifier utilizado por el prototipo es `https://api.battlehub.local/profile`. Se propone conservarlo en esta etapa para evitar modificar la integración existente. Es un identificador lógico, no la URL HTTP del servicio. Su nombre alude a Profile, aunque el alcance propuesto incluye Matchmaking; esta limitación de nomenclatura debe quedar clara en la configuración. Cualquier cambio posterior requiere actualizar coordinadamente el Shell y ambos backends.
+Profile también debe validar los tokens que recibe. Compartir audiencia no reemplaza las comprobaciones de permisos, anfitrión, participantes o capacidad de la sala. Los permisos que devuelve Profile tampoco se convierten automáticamente en scopes de Auth0.
 
-### Consulta de permisos
+La dirección de Profile debe estar configurada en el servidor. El cliente HTTP de Matchmaking no debe seguir redirecciones al enviar el token y, en despliegue, la conexión debe usar HTTPS. Los tokens no se guardan en la base de datos ni en los logs.
 
-1. El Shell envía su access token a Matchmaking como Bearer.
-2. Matchmaking valida el token y obtiene la identidad del usuario del claim `sub`.
-3. Para las acciones que requieren permisos, consulta Profile con ese mismo access token: primero `/api/profiles/me` y después `/api/profiles/me/permissions`.
-4. Comprueba que el identificador del perfil coincida con el usuario autenticado y verifica los permisos requeridos por la acción.
-5. Si Profile no está disponible, rechaza la operación dependiente de permisos; no permite la acción por defecto.
-
-La dirección de Profile procede de configuración del servidor, no de la solicitud del navegador. En despliegue debe utilizar HTTPS; el cliente HTTP no sigue redirecciones para evitar reenviar credenciales a otro destino. El token no debe guardarse en MongoDB ni registrarse en logs.
-
-Los permisos de negocio consultados en Profile no se convierten automáticamente en scopes OAuth. Compartir una audiencia no concede permisos para crear salas ni sustituye las reglas de anfitrión, membresía o capacidad.
+La aplicación del Shell debe tener autorizado el acceso delegado de usuario a la API en Auth0. La SPA del Shell y el registro de API son cosas distintas: esta propuesta no requiere otra SPA para el backend de Matchmaking. Para llamar a las APIs se utiliza el access token, no el ID token, y el frontend no lleva un Client Secret.
 
 ## Alternativas consideradas
 
-| Alternativa | Por qué no se eligió para esta etapa |
+| Alternativa | Por qué no se eligió para esta propuesta |
 |---|---|
-| Audiencias independientes y token exchange/delegación | Requiere definir el intercambio, su configuración Auth0 y los contratos necesarios antes de implementarlo. Ofrece mayor separación entre recursos. |
-| Audiencias independientes y acceso M2M de Matchmaking a Profile | Los endpoints `/me` describen al llamante, no a un usuario arbitrario. Se necesitaría un contrato autorizado de consulta por usuario y una política de acceso de servicio. |
-| Resolver permisos solo en el Shell | El navegador no puede ser la autoridad de las operaciones del backend. |
-| Aceptar en Profile cualquier audiencia del tenant | Elimina la validación del recurso destinatario y no es equivalente a una audiencia compartida explícita. |
+| Una audiencia distinta para cada servicio, con intercambio de tokens | Separa mejor los servicios, pero requiere acordar y configurar cómo Matchmaking obtiene un token válido para consultar Profile. |
+| Una credencial propia de Matchmaking para consultar Profile, mediante M2M | Haría falta definir una consulta autorizada de permisos por usuario. Los endpoints `/me` actuales representan a quien hace la llamada. |
+| Revisar los permisos solamente en el Shell | El backend necesita comprobarlos por su cuenta; no puede depender de lo que permita la pantalla. |
+| Aceptar cualquier audiencia del tenant | Se perdería la comprobación de que el token fue emitido para la API correspondiente. |
 
 ## Consecuencias
 
 - Positivas:
-  - Permite consultar los permisos mediante los endpoints actuales de Profile sin introducir un contrato de consulta por otro usuario.
-  - Mantiene un único flujo de login para el usuario.
-  - Conserva las comprobaciones de identidad y autorización en los backends.
+  - Podemos utilizar las consultas de perfil y permisos que ya están definidas.
+  - El usuario mantiene un solo flujo de inicio de sesión.
+  - Los servicios verifican los permisos antes de permitir las acciones.
 - Negativas / riesgos asumidos:
-  - Un token válido para la API lógica puede presentarse a ambos servicios. La audiencia no los aísla entre sí; cada servicio debe comprobar los permisos y las reglas de cada operación.
-  - Matchmaking recibe una credencial reutilizable ante Profile y pasa a formar parte de la misma frontera de confianza.
-  - Las acciones que consultan permisos dependen de la disponibilidad y latencia de Profile.
-  - El Identifier actual no describe claramente ambos servicios.
-  - Separar audiencias posteriormente requerirá una migración coordinada y un mecanismo de delegación o consulta entre servicios.
+  - El mismo token sirve para ambos servicios, por lo que la audiencia no los separa entre sí.
+  - Matchmaking recibe un token que también puede utilizarse en Profile y debe protegerlo.
+  - Las acciones que consultan permisos dependen de que Profile esté disponible.
+  - El nombre actual del Identifier no deja claro que también incluye Matchmaking.
+  - Si después se quieren separar las audiencias, habrá que ajustar la integración entre los tres equipos.
 
 ## Impacto en otros equipos
 
-- **Equipo 1:** revisar la audiencia lógica compartida, configurar Auth0 y mantener las consultas autenticadas de perfil y permisos.
-- **Equipo 2:** validar JWT y permisos en el backend, proteger el reenvío del bearer y mantener configurada la URL de Profile.
-- **Equipo 3:** solicitar la audiencia acordada y enviar el access token a las APIs y al hub de lobby. Los callbacks pertenecen a la SPA del Shell.
-- **Equipos 4, 5 y 6:** esta propuesta no incorpora sus APIs a la audiencia compartida ni define sus credenciales M2M.
+- **Equipo 1 — Identity & Profile:** revisar la propuesta con el Equipo 2, coordinar la configuración de la API en el tenant y mantener disponibles las consultas de perfil y permisos.
+- **Equipo 2 — Matchmaking & Lobby:** validar los tokens, consultar los permisos en Profile y aplicar las reglas de las salas en su backend.
+- **Equipo 3 — Shell:** configurar su aplicación Auth0, los callbacks, el cierre de sesión y la audiencia acordada. Enviar el access token a los servicios y al hub de lobby.
+- **Equipos 4, 5 y 6 — Juegos:** esta propuesta no incluye automáticamente sus APIs ni define sus credenciales de servicio.
 
-No se modifican rutas REST, nombres de eventos SignalR, el contrato visual ni `GameContext`. La decisión añade una política de autenticación entre Profile y Matchmaking que actualmente no está especificada en los contratos técnicos.
+No proponemos cambiar las rutas REST, los eventos SignalR ni `GameContext`. Lo que se busca acordar es cómo se utiliza Auth0 entre el Shell, Profile y Matchmaking.
 
-ADR-004 permanece marcado como Propuesto en la versión consultada. Su callback `/finish`, la identidad de los Game Services y el scope `matches.finish` quedan fuera de este ADR. Si se aprueban ambos documentos, el Tech Lead y los equipos deberán comprobar la compatibilidad de sus audiencias y políticas M2M antes de habilitar ese flujo.
+El ADR-004 está marcado como Propuesto en la versión consultada. Su flujo de finalización de partidas (`/finish`) y las credenciales de los servicios de juegos quedan fuera de este documento. Si se aceptan ambas propuestas, se debe revisar que sus configuraciones sean compatibles.
 
-La adopción definitiva queda sujeta a revisión del Tech Lead. Tras su aceptación, debe incorporarse la política acordada a `docs/03-contratos-tecnicos.md` y coordinarse la configuración entre los Equipos 1, 2 y 3.
+Este ADR queda pendiente de revisión y aprobación del Tech Lead. Si se acepta, el acuerdo debe agregarse a `docs/03-contratos-tecnicos.md` y los Equipos 1, 2 y 3 deben coordinar la configuración.
