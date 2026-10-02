@@ -1,4 +1,4 @@
-﻿# ADR-006: Audiencia compartida para Profile y Matchmaking
+# ADR-007: Audiencia compartida para Profile y Matchmaking
 
 - **Estado**: Propuesto
 - **Fecha**: 2026-10-02 (UTC)
